@@ -16,6 +16,15 @@
         <h2>Player Stats</h2>
         <p>Level: {{ player.level }}</p>
         <p>Total XP: {{ player.total_xp }}</p>
+
+        <div class="progress-container">
+            <div
+                class="progress-bar"
+                data-progress="{{ progress_percent }}"
+            ></div>
+        </div>
+
+        <p>{{ progress_percent }}% to Level {{ player.level + 1 }}</p>
     </div>
 
     <div class="section">
@@ -33,29 +42,37 @@
 
         {% for habit in habits %}
         <div class="habit-card">
-            <div>
-                <h3>{{ habit.name }}</h3>
-                <p>{{ habit.xp }} XP</p>
-                <p>Streak: {{ habit.streak }}</p>
+            <div class="habit-left">
+                <input
+                    type="checkbox"
+                    {% if habit.completions_today > 0 %}checked{% endif %}
+                    onclick="window.location.href='/complete/{{ habit.id }}'"
+                >
+
+                <div>
+                    <h3>{{ habit.name }}</h3>
+                    <p>{{ habit.xp }} XP</p>
+                    <p>Streak: {{ habit.streak }}</p>
+                    <p>Completed Today: {{ habit.completions_today }}</p>
+                </div>
             </div>
 
-            {% if habit.completed_today == 0 %}
-            <a href="/complete/{{ habit.id }}">
-                <button>Complete</button>
-            </a>
-            {% else %}
-            <button disabled>Done</button>
-            {% endif %}
+            <div class="habit-actions">
+                <a href="/complete/{{ habit.id }}">
+                    <button>+1</button>
+                </a>
 
-            <a href="/delete_habit/{{ habit.id }}">
-            <button class="delete-button">Delete</button>
-            </a>
+                <a href="/delete_habit/{{ habit.id }}">
+                    <button class="delete-button">Delete</button>
+                </a>
+            </div>
         </div>
         {% endfor %}
     </div>
 
     <div class="section">
         <h2>Reward Shop</h2>
+
         <form action="/add_reward" method="POST">
             <input type="text" name="name" placeholder="Reward Name" required>
             <input type="number" name="cost" placeholder="XP Cost" required>
@@ -69,12 +86,15 @@
                 <p>{{ reward.cost }} XP</p>
             </div>
 
-            <a href="/redeem/{{ reward.id }}">
-                <button>Redeem</button>
-            </a>
-            <a href="/delete_reward/{{ reward.id }}">
-                <button class="delete-button">Delete</button>
-            </a>
+            <div class="habit-actions">
+                <a href="/redeem/{{ reward.id }}">
+                    <button>Redeem</button>
+                </a>
+
+                <a href="/delete_reward/{{ reward.id }}">
+                    <button class="delete-button">Delete</button>
+                </a>
+            </div>
         </div>
         {% endfor %}
     </div>
