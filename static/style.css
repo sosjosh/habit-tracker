@@ -85,14 +85,24 @@ button:hover {
     background: #b00020;
 }
 
-.reset-button {
-    background: #d9534f;
-}
-
 input {
     padding: 10px;
     margin-right: 10px;
     margin-bottom: 10px;
     border-radius: 6px;
     border: none;
+}
+
+.undo-link {
+    background: #555;
+    font-size: 12px;
+}
+
+.undo-link:hover {
+    background: #777;
+    opacity: 1;
+}
+
+.undo-link:hover {
+    color: white;
 }
