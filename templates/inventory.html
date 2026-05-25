@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reward Inventory</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+
+    <a href="/" class="back-link">← Back</a>
+    <h1>Reward Inventory</h1>
+
+    <div class="section">
+        {% if logs %}
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Reward</th>
+                    <th>XP Spent</th>
+                    <th>Date</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ log.reward_name }}</td>
+                    <td>{{ log.cost }}</td>
+                    <td>{{ log.timestamp[:10] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-note">No rewards redeemed yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+</body>
+</html>

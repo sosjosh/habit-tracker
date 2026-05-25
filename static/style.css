@@ -190,6 +190,409 @@ input {
     background: #1e4a5a;
     opacity: 1;
 }
+/* ── DAILY SUMMARY ── */
+.summary-section {
+    padding: 16px 20px;
+}
 
-/* ── AUTO-DISMISS FLASHES ── */
-/* handled in app.js */
+.summary-text {
+    font-size: 14px;
+    margin-bottom: 8px;
+    color: #ccc;
+}
+
+.summary-bar-container {
+    width: 100%;
+    height: 10px;
+    background: #333;
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.summary-bar {
+    height: 100%;
+    background: #4caf50;
+    border-radius: 6px;
+    transition: width 0.4s ease;
+}
+
+.summary-complete {
+    color: #a5d6a7;
+    font-size: 14px;
+    margin: 4px 0 0;
+}
+
+/* ── XP MULTIPLIER ── */
+.xp-boosted {
+    color: #ffd54f;
+    font-weight: bold;
+}
+
+.xp-multiplier {
+    font-size: 11px;
+    color: #ffb300;
+    background: #2a2000;
+    padding: 2px 5px;
+    border-radius: 4px;
+    margin-left: 4px;
+}
+
+/* ── SECTION HEADER ── */
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.section-header h2 {
+    margin: 0;
+}
+
+.inventory-link {
+    font-size: 13px;
+    color: #90caf9;
+    text-decoration: none;
+    padding: 6px 10px;
+    border: 1px solid #42a5f5;
+    border-radius: 6px;
+}
+
+.inventory-link:hover {
+    background: #1a2a3a;
+}
+
+/* ── HISTORY BUTTON ── */
+.history-button {
+    background: #2a2a2a;
+    border: 1px solid #555;
+    font-size: 14px;
+    padding: 8px 10px;
+}
+
+.history-button:hover {
+    background: #3a3a3a;
+    opacity: 1;
+}
+
+/* ── BACK LINK ── */
+.back-link {
+    display: inline-block;
+    color: #90caf9;
+    text-decoration: none;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.back-link:hover {
+    text-decoration: underline;
+}
+
+.habit-meta {
+    color: #aaa;
+    margin-bottom: 20px;
+}
+
+/* ── WEEKLY GRID ── */
+.week-grid {
+    display: flex;
+    gap: 8px;
+}
+
+.week-cell {
+    flex: 1;
+    background: #2d2d2d;
+    border-radius: 8px;
+    padding: 12px 4px;
+    text-align: center;
+    border: 2px solid transparent;
+}
+
+.week-done {
+    background: #1a3a1a;
+    border-color: #4caf50;
+}
+
+.week-label {
+    display: block;
+    font-size: 11px;
+    color: #aaa;
+    margin-bottom: 6px;
+}
+
+.week-dot {
+    display: block;
+    font-size: 16px;
+    color: #4caf50;
+    min-height: 20px;
+}
+
+/* ── LOG TABLE ── */
+.log-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.log-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid #333;
+    color: #aaa;
+    font-weight: normal;
+}
+
+.log-table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #222;
+}
+
+.log-table tr:hover td {
+    background: #2a2a2a;
+}
+
+.empty-note {
+    color: #555;
+    font-style: italic;
+    font-size: 14px;
+}
+
+/* ── WEEKLY OVERVIEW GRID ── */
+.weekly-overview {
+    overflow-x: auto;
+}
+
+.weekly-header,
+.weekly-row {
+    display: grid;
+    grid-template-columns: 140px repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 4px;
+    align-items: center;
+}
+
+.weekly-day-header {
+    text-align: center;
+    font-size: 11px;
+    color: #aaa;
+    padding: 4px 0;
+}
+
+.weekly-today {
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.weekly-habit-label {
+    font-size: 12px;
+    color: #ccc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding-right: 8px;
+}
+
+.weekly-cell {
+    height: 28px;
+    border-radius: 4px;
+    background: #2d2d2d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    color: #555;
+}
+
+.weekly-cell-done {
+    background: #1a3a1a;
+    color: #4caf50;
+    font-weight: bold;
+}
+
+.weekly-cell-today {
+    border: 1px solid #555;
+}
+
+/* ── WEEK STRIP (inside habit card) ── */
+.week-strip {
+    display: flex;
+    gap: 4px;
+    margin-top: 6px;
+}
+
+.week-strip-cell {
+    width: 22px;
+    height: 22px;
+    border-radius: 4px;
+    background: #2d2d2d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.week-strip-done {
+    background: #1a3a1a;
+    border: 1px solid #4caf50;
+}
+
+.week-strip-today {
+    border: 1px solid #777;
+}
+
+.week-strip-label {
+    font-size: 9px;
+    color: #666;
+}
+
+.week-strip-done .week-strip-label {
+    color: #4caf50;
+}
+
+/* ── UNSCHEDULED HABIT ── */
+.habit-unscheduled {
+    opacity: 0.5;
+}
+
+.schedule-badge {
+    font-size: 10px;
+    color: #888;
+    background: #2a2a2a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    font-weight: normal;
+}
+
+/* ── DRAG AND DROP ── */
+.drag-handle {
+    cursor: grab;
+    color: #555;
+    font-size: 18px;
+    padding: 0 6px;
+    user-select: none;
+}
+
+.habit-card.dragging {
+    opacity: 0.4;
+    border: 1px dashed #4caf50;
+}
+
+/* ── PIN ── */
+.pin-indicator {
+    font-size: 12px;
+    margin-right: 4px;
+}
+
+.pin-button {
+    background: #2a2a2a;
+    border: 1px solid #444;
+    font-size: 13px;
+    padding: 6px 8px;
+}
+
+.pin-button:hover {
+    background: #3a3a3a;
+    opacity: 1;
+}
+
+/* ── NOTE MODAL ── */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+.modal-box {
+    background: #1e1e1e;
+    border-radius: 12px;
+    padding: 24px;
+    width: 380px;
+    max-width: 90vw;
+}
+
+.modal-box h3 {
+    margin: 0 0 8px;
+}
+
+.modal-box p {
+    color: #aaa;
+    font-size: 13px;
+    margin-bottom: 12px;
+}
+
+.note-input {
+    width: 100%;
+    background: #2d2d2d;
+    border: 1px solid #444;
+    border-radius: 8px;
+    color: white;
+    padding: 10px;
+    font-size: 14px;
+    resize: vertical;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+}
+
+.btn-modal-confirm {
+    flex: 1;
+    background: #4caf50;
+}
+
+.btn-modal-cancel {
+    background: #444;
+}
+
+.btn-complete {
+    background: #4caf50;
+    color: white;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.btn-complete:disabled {
+    background: #333;
+    color: #666;
+    cursor: not-allowed;
+}
+
+/* ── NOTE IN LOG TABLE ── */
+.log-note {
+    color: #aaa;
+    font-style: italic;
+    font-size: 13px;
+    max-width: 200px;
+}
+
+/* ── INLINE NOTE FORM (history page) ── */
+.note-form-inline {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.skip-button {
+    background: #2a2a3a;
+    border: 1px solid #555;
+    font-size: 13px;
+    padding: 8px 10px;
+    color: #aaa;
+}
+
+.skip-button:hover {
+    background: #3a3a4a;
+    opacity: 1;
+    color: white;
+}

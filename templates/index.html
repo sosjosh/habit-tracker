@@ -11,7 +11,7 @@
 
     <h1>Habit Quest</h1>
 
-    <!-- ── FLASH MESSAGES ── -->
+    <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
         <div class="flash-container">
@@ -22,71 +22,182 @@
         {% endif %}
     {% endwith %}
 
-    <!-- ── PLAYER STATS ── -->
+    <!-- PLAYER STATS -->
     <div class="stats-card">
         <h2>Player Stats</h2>
         <p>Level: {{ player.level }}</p>
         <p>Total XP: {{ player.total_xp }}</p>
-
         <div class="progress-container">
             <div class="progress-bar" data-progress="{{ progress_percent }}"></div>
         </div>
         <p>{{ progress_percent }}% to Level {{ player.level + 1 }}</p>
-
     </div>
 
-    <!-- ── HABITS ── -->
+    <!-- DAILY SUMMARY -->
+    <div class="section summary-section">
+        <div class="summary-text">
+            Today's Progress:
+            <strong>{{ completed_count }} / {{ total_habits }}</strong> habits done
+        </div>
+        <div class="summary-bar-container">
+            <div class="summary-bar"
+                 data-progress="{% if total_habits > 0 %}{{ (completed_count / total_habits * 100) | int }}{% else %}0{% endif %}">
+            </div>
+        </div>
+        {% if completed_count == total_habits and total_habits > 0 %}
+        <p class="summary-complete">🏆 All habits complete for today!</p>
+        {% endif %}
+    </div>
+
+    <!-- WEEKLY OVERVIEW GRID -->
+    <div class="section">
+        <h2>This Week</h2>
+        <div class="weekly-overview">
+            <!-- Day headers -->
+            <div class="weekly-header">
+                <div class="weekly-habit-label"></div>
+                {% set days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}
+                {% for i in range(7) %}
+                <div class="weekly-day-header {% if i == today_index %}weekly-today{% endif %}">
+                    {{ days[i] }}
+                </div>
+                {% endfor %}
+            </div>
+
+            <!-- One row per habit -->
+            {% for habit in habits %}
+            <div class="weekly-row">
+                <div class="weekly-habit-label" title="{{ habit.name }}">
+                    {{ habit.name }}
+                </div>
+                {% for day in habit.week_grid %}
+                <div class="weekly-cell
+                    {% if day.completed %}weekly-cell-done{% endif %}
+                    {% if day.today %}weekly-cell-today{% endif %}"
+                    title="{{ day.date }}">
+                    {% if day.completed %}✓{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- HABITS -->
     <div class="section">
         <h2>Today's Habits</h2>
-
+        <div id="habit-list">
         {% for habit in habits %}
-        <div class="habit-card">
+        <div class="habit-card {% if not habit.scheduled_today %}habit-unscheduled{% endif %}"
+             data-id="{{ habit.id }}"
+             draggable="true">
+
             <div class="habit-left">
-                <form action="/complete/{{ habit.id }}" method="POST" id="complete-form-{{ habit.id }}">
+                <span class="drag-handle" title="Drag to reorder">⠿</span>
+
+                <form action="/complete/{{ habit.id }}" method="POST"
+                      id="complete-form-{{ habit.id }}">
+                    <input type="hidden" name="note" value="">
                     <input
                         type="checkbox"
                         {% if habit.completions_today > 0 %}checked{% endif %}
                         onchange="document.getElementById('complete-form-{{ habit.id }}').submit()"
+                        {% if not habit.scheduled_today %}disabled title="Not scheduled today"{% endif %}
                     >
                 </form>
 
                 <div>
-                    <h3>{{ habit.name }}</h3>
+                    <h3>
+                        {% if habit.pinned %}
+                        <span class="pin-indicator" title="Pinned">📌</span>
+                        {% endif %}
+                        {{ habit.name }}
+                        {% if not habit.scheduled_today %}
+                        <span class="schedule-badge">{{ habit.schedule_display }}</span>
+                        {% endif %}
+                    </h3>
                     <p>
-                        {{ habit.xp }} XP &nbsp;|&nbsp;
-                        🔥 {{ habit.streak }} day streak &nbsp;|&nbsp;
-                        ✅ {{ habit.completions_today }}× today
+                        {% if habit.multiplier > 1 %}
+                            <span class="xp-boosted">{{ habit.boosted_xp }} XP</span>
+                            <span class="xp-multiplier">×{{ "%.2f"|format(habit.multiplier) }}</span>
+                        {% else %}
+                            {{ habit.xp }} XP
+                        {% endif %}
+                        &nbsp;|&nbsp; 🔥 {{ habit.streak }} day streak
+                        &nbsp;|&nbsp; ✅ {{ habit.completions_today }}× today
                     </p>
-                    <!-- Per-habit freeze display -->
+
+                    <!-- Per-habit week strip -->
+                    <div class="week-strip">
+                        {% for day in habit.week_grid %}
+                        <div class="week-strip-cell
+                            {% if day.completed %}week-strip-done{% endif %}
+                            {% if day.today %}week-strip-today{% endif %}"
+                            title="{{ day.date }}">
+                            <span class="week-strip-label">{{ day.label[0] }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <!-- Freezes -->
                     <p class="freeze-row">
                         {% if habit.streak_freezes > 0 %}
                             {% for i in range(habit.streak_freezes) %}
-                                <span class="freeze-icon" title="Streak Freeze available for this habit">🧊</span>
+                            <span class="freeze-icon" title="Streak Freeze">🧊</span>
                             {% endfor %}
                             <span class="freeze-label">× {{ habit.streak_freezes }}</span>
                         {% else %}
-                            <span class="freeze-empty">No freezes — earn 1 per 5 completions</span>
+                            <span class="freeze-empty">
+                                No freezes — earn 1 per 5 completions
+                            </span>
                         {% endif %}
                     </p>
                 </div>
             </div>
 
             <div class="habit-actions">
-                <form action="/complete/{{ habit.id }}" method="POST">
-                    <button type="submit">Completed</button>
-                </form>
+            <button type="button"
+                    class="btn-complete"
+                    onclick="openNoteModal({{ habit.id }})"
+                    {% if not habit.scheduled_today %}disabled{% endif %}>
+                +1
+            </button>
 
-                <form action="/undo_habit/{{ habit.id }}" method="POST">
-                    <button type="submit" class="undo-link">Undo</button>
-                </form>
-            </div>
+            <form action="/undo_habit/{{ habit.id }}" method="POST">
+                <button type="submit" class="undo-link">-1</button>
+            </form>
+
+            <!-- SKIP BUTTON — only show if not already completed today -->
+            {% if habit.completions_today == 0 %}
+            <form action="/skip/{{ habit.id }}" method="POST">
+                <button type="submit" class="skip-button" title="Skip today — streak preserved">
+                    ⏭️
+                </button>
+            </form>
+            {% endif %}
+
+            <form action="/pin/{{ habit.id }}" method="POST">
+                <button type="submit" class="pin-button"
+                        title="{% if habit.pinned %}Unpin{% else %}Pin{% endif %}">
+                    {% if habit.pinned %}📌{% else %}📍{% endif %}
+                </button>
+            </form>
+
+            <a href="/habit/{{ habit.id }}/history">
+                <button type="button" class="history-button">📋</button>
+            </a>
+        </div>
         </div>
         {% endfor %}
+        </div>
     </div>
 
-    <!-- ── REWARD SHOP ── -->
+    <!-- REWARD SHOP -->
     <div class="section">
-        <h2>Reward Shop</h2>
+        <div class="section-header">
+            <h2>Reward Shop</h2>
+            <a href="/inventory" class="inventory-link">📦 Inventory</a>
+        </div>
 
         {% for reward in rewards %}
         <div class="reward-card">
@@ -96,7 +207,8 @@
             </div>
 
             <div class="habit-actions">
-                <form action="/redeem/{{ reward.id }}" method="POST">
+                <form action="/redeem/{{ reward.id }}" method="POST"
+                      onsubmit="return confirmRedeem('{{ reward.name }}', {{ reward.cost }}, {{ player.total_xp }})">
                     <button type="submit">Redeem</button>
                 </form>
 
@@ -108,6 +220,23 @@
         {% endfor %}
     </div>
 
+</div>
+
+<!-- NOTE MODAL -->
+<div id="note-modal" class="modal-overlay" style="display:none">
+    <div class="modal-box">
+        <h3>Complete Habit</h3>
+        <p>Add an optional note for this completion:</p>
+        <form id="note-form" action="" method="POST">
+            <textarea name="note" class="note-input"
+                      placeholder="e.g. ran 5k, felt great…" rows="3"></textarea>
+            <div class="modal-actions">
+                <button type="submit" class="btn-modal-confirm">✅ Complete</button>
+                <button type="button" class="btn-modal-cancel"
+                        onclick="closeNoteModal()">Cancel</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>

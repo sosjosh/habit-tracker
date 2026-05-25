@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ habit.name }} — History</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+
+    <a href="/" class="back-link">← Back</a>
+    <h1>{{ habit.name }}</h1>
+    <p class="habit-meta">
+        {{ habit.xp }} XP &nbsp;|&nbsp;
+        🔥 {{ habit.streak }} day streak &nbsp;|&nbsp;
+        📅 {{ schedule_display }}
+    </p>
+
+    <!-- WEEKLY VIEW -->
+    <div class="section">
+        <h2>This Week</h2>
+        <div class="week-grid">
+            {% for day in week_grid %}
+            <div class="week-cell {% if day.completed %}week-done{% endif %}">
+                <span class="week-label">{{ day.label }}</span>
+                <span class="week-dot">{% if day.completed %}✓{% endif %}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- ADD NOTE TO MOST RECENT LOG -->
+    {% if logs %}
+    <div class="section">
+        <h2>Add Note to Last Completion</h2>
+        <form action="/add_note/{{ habit.id }}" method="POST"
+              class="note-form-inline">
+            <textarea name="note" class="note-input"
+                      placeholder="How did it go?"
+                      rows="2">{{ logs[0].note or '' }}</textarea>
+            <button type="submit">Save Note</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- FULL LOG -->
+    <div class="section">
+        <h2>All Completions</h2>
+        {% if logs %}
+        <table class="log-table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Date</th>
+                    <th>Time</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in logs %}
+                <tr>
+                    <td>{{ loop.index }}</td>
+                    <td>{{ log.timestamp[:10] }}</td>
+                    <td>{{ log.timestamp[11:16] }}</td>
+                    <td class="log-note">{{ log.note or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-note">No completions yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+</body>
+</html>

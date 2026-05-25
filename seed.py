@@ -1,24 +1,30 @@
-# seed.py — run with: python3 seed.py
-# Safe to re-run: skips items that already exist by name.
-
+# seed.py — run with: python seed.py
 import sqlite3
 from data import HABITS, REWARDS
 
 conn = sqlite3.connect("habits.db")
-cur = conn.cursor()
+cur  = conn.cursor()
 
-for h in HABITS:
+for i, h in enumerate(HABITS):
     exists = cur.execute(
         "SELECT id FROM habits WHERE name = ?", (h["name"],)
     ).fetchone()
     if not exists:
         cur.execute(
-            "INSERT INTO habits (name, xp) VALUES (?, ?)",
-            (h["name"], h["xp"])
+            """INSERT INTO habits (name, xp, pinned, schedule, sort_order)
+               VALUES (?, ?, ?, ?, ?)""",
+            (h["name"], h["xp"], h.get("pinned", 0),
+             h.get("schedule", "1111111"), i)
         )
-        print(f"  Added habit:  {h['name']}")
+        print(f"  Added habit: {h['name']}")
     else:
-        print(f"  Skipped (exists): {h['name']}")
+        # Update schedule and pinned if habit already exists
+        cur.execute(
+            """UPDATE habits SET pinned = ?, schedule = ?
+               WHERE name = ?""",
+            (h.get("pinned", 0), h.get("schedule", "1111111"), h["name"])
+        )
+        print(f"  Updated: {h['name']}")
 
 for r in REWARDS:
     exists = cur.execute(
