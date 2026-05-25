@@ -737,6 +737,7 @@ def undo_reward(reward_id):
     if not reward:
         return redirect(url_for("home"))
 
+    # Only undo if there is actually a redemption log entry for this reward
     last_redemption = db.execute("""
         SELECT id FROM redemption_logs
         WHERE reward_id = ?
@@ -744,11 +745,18 @@ def undo_reward(reward_id):
         LIMIT 1
     """, (reward_id,)).fetchone()
 
-    if last_redemption:
-        db.execute(
-            "DELETE FROM redemption_logs WHERE id = ?",
-            (last_redemption["id"],)
+    if not last_redemption:
+        flash(
+            f"❌ No purchase record found for "
+            f"<strong>{reward['name']}</strong> — nothing to undo.",
+            "error"
         )
+        return redirect(url_for("home"))
+
+    db.execute(
+        "DELETE FROM redemption_logs WHERE id = ?",
+        (last_redemption["id"],)
+    )
 
     new_xp    = player["total_xp"] + reward["cost"]
     new_level = calculate_level(new_xp)
@@ -821,6 +829,202 @@ def habit_history(habit_id):
         schedule_display=schedule_display(habit["schedule"]),
     )
 
+# ─────────────────────────────────────────────
+# ROUTES — TODO LISTS
+# ─────────────────────────────────────────────
+
+@app.route("/todos")
+def todos():
+    db    = get_db()
+    lists = db.execute("""
+        SELECT * FROM todo_lists ORDER BY completed ASC, id DESC
+    """).fetchall()
+
+    player = db.execute("SELECT * FROM player WHERE id = 1").fetchone()
+
+    # Attach items to each list
+    todo_data = []
+    for lst in lists:
+        items = db.execute("""
+            SELECT * FROM todo_items
+            WHERE list_id = ?
+            ORDER BY sort_order ASC, id ASC
+        """, (lst["id"],)).fetchall()
+
+        total   = len(items)
+        checked = sum(1 for i in items if i["checked"])
+
+        todo_data.append({
+            "id":        lst["id"],
+            "name":      lst["name"],
+            "reward_xp": lst["reward_xp"],
+            "completed": lst["completed"],
+            "todo_items":     items,
+            "total":     total,
+            "checked":   checked,
+            "percent":   int((checked / total) * 100) if total > 0 else 0,
+        })
+
+    return render_template("todos.html", todo_data=todo_data, player=player)
+
+
+@app.route("/todos/add_list", methods=["POST"])
+def add_todo_list():
+    db        = get_db()
+    name      = request.form.get("name", "").strip()
+    reward_xp = int(request.form.get("reward_xp", 0))
+    now       = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    if not name:
+        flash("List name cannot be empty.", "error")
+        return redirect(url_for("todos"))
+
+    db.execute(
+        "INSERT INTO todo_lists (name, reward_xp, created_at) VALUES (?, ?, ?)",
+        (name, reward_xp, now)
+    )
+    db.commit()
+    flash(f"📋 Created list <strong>{name}</strong>.", "success")
+    return redirect(url_for("todos"))
+
+
+@app.route("/todos/<int:list_id>/add_item", methods=["POST"])
+def add_todo_item(list_id):
+    db   = get_db()
+    text = request.form.get("text", "").strip()
+
+    if not text:
+        flash("Item text cannot be empty.", "error")
+        return redirect(url_for("todos"))
+
+    max_order = db.execute(
+        "SELECT MAX(sort_order) AS m FROM todo_items WHERE list_id = ?",
+        (list_id,)
+    ).fetchone()["m"] or 0
+
+    db.execute(
+        "INSERT INTO todo_items (list_id, text, sort_order) VALUES (?, ?, ?)",
+        (list_id, text, max_order + 1)
+    )
+    db.commit()
+    return redirect(url_for("todos"))
+
+
+@app.route("/todos/<int:list_id>/check/<int:item_id>", methods=["POST"])
+def check_todo_item(list_id, item_id):
+    db   = get_db()
+    item = db.execute(
+        "SELECT * FROM todo_items WHERE id = ?", (item_id,)
+    ).fetchone()
+
+    if not item:
+        return redirect(url_for("todos"))
+
+    # Toggle checked state
+    new_checked = 0 if item["checked"] else 1
+    db.execute(
+        "UPDATE todo_items SET checked = ? WHERE id = ?",
+        (new_checked, item_id)
+    )
+    db.commit()
+
+    # Check if all items in this list are now complete
+    lst = db.execute(
+        "SELECT * FROM todo_lists WHERE id = ?", (list_id,)
+    ).fetchone()
+
+    total   = db.execute(
+        "SELECT COUNT(*) AS cnt FROM todo_items WHERE list_id = ?",
+        (list_id,)
+    ).fetchone()["cnt"]
+
+    checked = db.execute(
+        "SELECT COUNT(*) AS cnt FROM todo_items WHERE list_id = ? AND checked = 1",
+        (list_id,)
+    ).fetchone()["cnt"]
+
+    # Award XP if just became fully complete and wasn't already marked complete
+    if total > 0 and checked == total and not lst["completed"]:
+        db.execute(
+            "UPDATE todo_lists SET completed = 1 WHERE id = ?", (list_id,)
+        )
+
+        if lst["reward_xp"] > 0:
+            player    = db.execute("SELECT * FROM player WHERE id = 1").fetchone()
+            new_xp    = player["total_xp"] + lst["reward_xp"]
+            new_level = calculate_level(new_xp)
+            db.execute(
+                "UPDATE player SET total_xp = ?, level = ? WHERE id = 1",
+                (new_xp, new_level)
+            )
+            db.commit()
+            flash(
+                f"🏆 Completed <strong>{lst['name']}</strong>! "
+                f"+{lst['reward_xp']} XP awarded!",
+                "success"
+            )
+        else:
+            flash(
+                f"✅ Completed <strong>{lst['name']}</strong>!",
+                "success"
+            )
+
+    # If unchecking an item on a completed list, reopen it
+    elif lst["completed"] and new_checked == 0:
+        db.execute(
+            "UPDATE todo_lists SET completed = 0 WHERE id = ?", (list_id,)
+        )
+        db.commit()
+
+    db.commit()
+    return redirect(url_for("todos"))
+
+
+@app.route("/todos/<int:list_id>/delete", methods=["POST"])
+def delete_todo_list(list_id):
+    db  = get_db()
+    lst = db.execute(
+        "SELECT name FROM todo_lists WHERE id = ?", (list_id,)
+    ).fetchone()
+    db.execute("DELETE FROM todo_items WHERE list_id = ?", (list_id,))
+    db.execute("DELETE FROM todo_lists WHERE id = ?",      (list_id,))
+    db.commit()
+    flash(f"🗑️ Deleted list <strong>{lst['name']}</strong>.", "info")
+    return redirect(url_for("todos"))
+
+
+@app.route("/todos/<int:list_id>/delete_item/<int:item_id>", methods=["POST"])
+def delete_todo_item(list_id, item_id):
+    db = get_db()
+
+    # If deleting from a completed list, reopen it
+    # (total items changed so completion is no longer valid)
+    lst = db.execute(
+        "SELECT * FROM todo_lists WHERE id = ?", (list_id,)
+    ).fetchone()
+    if lst and lst["completed"]:
+        db.execute(
+            "UPDATE todo_lists SET completed = 0 WHERE id = ?", (list_id,)
+        )
+
+    db.execute("DELETE FROM todo_items WHERE id = ?", (item_id,))
+    db.commit()
+    return redirect(url_for("todos"))
+
+
+@app.route("/todos/<int:list_id>/reset", methods=["POST"])
+def reset_todo_list(list_id):
+    """Uncheck all items and reopen the list so it can be reused."""
+    db = get_db()
+    db.execute(
+        "UPDATE todo_items SET checked = 0 WHERE list_id = ?", (list_id,)
+    )
+    db.execute(
+        "UPDATE todo_lists SET completed = 0 WHERE id = ?", (list_id,)
+    )
+    db.commit()
+    flash("🔄 List reset.", "info")
+    return redirect(url_for("todos"))
 
 # ─────────────────────────────────────────────
 # STARTUP

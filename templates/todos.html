@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>To-Do Lists — Habit Quest</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+
+    <a href="/" class="back-link">← Back</a>
+    <h1>To-Do Lists</h1>
+    <p class="habit-meta">Your XP: {{ player.total_xp }}</p>
+
+    <!-- FLASH MESSAGES -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-container">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message | safe }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- CREATE NEW LIST -->
+    <div class="section">
+        <h2>New List</h2>
+        <form action="/todos/add_list" method="POST" class="todo-create-form">
+            <input type="text"
+                   name="name"
+                   placeholder="List name (e.g. Weekly Chores)"
+                   required>
+            <input type="number"
+                   name="reward_xp"
+                   placeholder="XP reward on completion"
+                   min="0"
+                   value="50">
+            <button type="submit">Create</button>
+        </form>
+    </div>
+
+    <!-- TODO LISTS -->
+    {% for lst in todo_data %}
+    <div class="section todo-list-card
+                {% if lst.completed %}todo-list-complete{% endif %}">
+
+        <!-- List header -->
+        <div class="todo-list-header">
+            <div>
+                <h2 class="todo-list-title">
+                    {% if lst.completed %}✅{% endif %}
+                    {{ lst.name }}
+                </h2>
+                <p class="todo-list-meta">
+                    {{ lst.checked }} / {{ lst.total }} items
+                    &nbsp;|&nbsp;
+                    🎁 {{ lst.reward_xp }} XP on completion
+                </p>
+            </div>
+
+            <div class="todo-list-actions">
+                {% if lst.completed %}
+                <form action="/todos/{{ lst.id }}/reset" method="POST">
+                    <button type="submit" class="btn-reset">🔄 Reset</button>
+                </form>
+                {% endif %}
+                <form action="/todos/{{ lst.id }}/delete" method="POST"
+                      onsubmit="return confirm('Delete this list?')">
+                    <button type="submit" class="delete-button">Delete</button>
+                </form>
+            </div>
+        </div>
+
+        <!-- Progress bar -->
+        <div class="todo-progress-container">
+            <div class="todo-progress-bar"
+                 data-progress="{{ lst.percent }}">
+            </div>
+        </div>
+
+        <!-- Items -->
+        <ul class="todo-item-list">
+            {% for item in lst.todo_items %}
+            <li class="todo-item {% if item.checked %}todo-item-checked{% endif %}">
+                <form action="/todos/{{ lst.id }}/check/{{ item.id }}"
+                      method="POST"
+                      class="todo-check-form">
+                    <input type="checkbox"
+                           onchange="this.form.submit()"
+                           {% if item.checked %}checked{% endif %}>
+                    <span class="todo-item-text">{{ item.text }}</span>
+                </form>
+                <form action="/todos/{{ lst.id }}/delete_item/{{ item.id }}"
+                      method="POST">
+                    <button type="submit" class="todo-delete-item"
+                            title="Remove item">×</button>
+                </form>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <!-- Add item -->
+        {% if not lst.completed %}
+        <form action="/todos/{{ lst.id }}/add_item" method="POST"
+              class="todo-add-item-form">
+            <input type="text"
+                   name="text"
+                   placeholder="Add item…"
+                   required>
+            <button type="submit">Add</button>
+        </form>
+        {% endif %}
+
+    </div>
+    {% endfor %}
+
+    {% if not todo_data %}
+    <div class="section">
+        <p class="empty-note">No lists yet — create one above.</p>
+    </div>
+    {% endif %}
+
+</div>
+<script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>

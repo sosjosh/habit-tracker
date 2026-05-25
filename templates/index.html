@@ -11,6 +11,11 @@
 
     <h1>Habit Quest</h1>
 
+    <div class="nav-links">
+        <a href="/todos" class="nav-link">📝 To-Do Lists</a>
+        <a href="/inventory" class="nav-link">📦 Inventory</a>
+    </div>
+
     <!-- FLASH MESSAGES -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -21,7 +26,7 @@
         </div>
         {% endif %}
     {% endwith %}
-
+    
     <!-- PLAYER STATS -->
     <div class="stats-card">
         <h2>Player Stats</h2>
@@ -196,7 +201,6 @@
     <div class="section">
         <div class="section-header">
             <h2>Reward Shop</h2>
-            <a href="/inventory" class="inventory-link">📦 Inventory</a>
         </div>
 
         {% for reward in rewards %}

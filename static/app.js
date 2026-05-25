@@ -1,7 +1,7 @@
 console.log("Habit Quest Loaded");
 
 // ── PROGRESS BARS ──
-document.querySelectorAll(".progress-bar, .summary-bar").forEach(bar => {
+document.querySelectorAll(".progress-bar, .summary-bar, .todo-progress-bar").forEach(bar => {
     const progress = bar.dataset.progress;
     if (progress !== undefined) {
         bar.style.width = progress + "%";
