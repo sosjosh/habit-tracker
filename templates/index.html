@@ -7,50 +7,41 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-
 <div class="container">
 
     <h1>Habit Quest</h1>
 
+    <!-- ── FLASH MESSAGES ── -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-container">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message | safe }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- ── PLAYER STATS ── -->
     <div class="stats-card">
         <h2>Player Stats</h2>
         <p>Level: {{ player.level }}</p>
         <p>Total XP: {{ player.total_xp }}</p>
 
         <div class="progress-container">
-            <div
-                class="progress-bar"
-                data-progress="{{ progress_percent }}"
-            ></div>
+            <div class="progress-bar" data-progress="{{ progress_percent }}"></div>
         </div>
-
         <p>{{ progress_percent }}% to Level {{ player.level + 1 }}</p>
+
     </div>
 
-    <div class="section">
-        <h2>Add Habit</h2>
-        <!-- unchanged — add_habit was already POST -->
-        <form action="/add_habit" method="POST">
-            <input type="text" name="name" placeholder="Habit Name" required>
-            <input type="number" name="xp" placeholder="XP" required>
-            <button type="submit">Add Habit</button>
-        </form>
-    </div>
-
+    <!-- ── HABITS ── -->
     <div class="section">
         <h2>Today's Habits</h2>
 
         {% for habit in habits %}
         <div class="habit-card">
             <div class="habit-left">
-
-                <!--
-                    CHANGED: removed onclick="window.location.href=..."
-                    Checkbox now submits a POST form instead of a GET link.
-                    The form is hidden; the checkbox click triggers it.
-                    This only fires the complete route — it does not "uncheck"
-                    on a second click (undo has its own button below).
-                -->
                 <form action="/complete/{{ habit.id }}" method="POST" id="complete-form-{{ habit.id }}">
                     <input
                         type="checkbox"
@@ -61,56 +52,41 @@
 
                 <div>
                     <h3>{{ habit.name }}</h3>
-                    <p>{{ habit.xp }} XP</p>
-                    <p>Streak: {{ habit.streak }} 🔥</p>
-                    <p>Completed Today: {{ habit.completions_today }}</p>
+                    <p>
+                        {{ habit.xp }} XP &nbsp;|&nbsp;
+                        🔥 {{ habit.streak }} day streak &nbsp;|&nbsp;
+                        ✅ {{ habit.completions_today }}× today
+                    </p>
+                    <!-- Per-habit freeze display -->
+                    <p class="freeze-row">
+                        {% if habit.streak_freezes > 0 %}
+                            {% for i in range(habit.streak_freezes) %}
+                                <span class="freeze-icon" title="Streak Freeze available for this habit">🧊</span>
+                            {% endfor %}
+                            <span class="freeze-label">× {{ habit.streak_freezes }}</span>
+                        {% else %}
+                            <span class="freeze-empty">No freezes — earn 1 per 5 completions</span>
+                        {% endif %}
+                    </p>
                 </div>
             </div>
 
             <div class="habit-actions">
-
-                <!--
-                    CHANGED: was <a href="/complete/..."><button>
-                    GET links that mutate data are a bug — a browser
-                    prefetch or accidental click would complete the habit.
-                    Now a POST form with a button inside.
-                -->
                 <form action="/complete/{{ habit.id }}" method="POST">
-                    <button type="submit">+1</button>
+                    <button type="submit">Completed</button>
                 </form>
 
-                <!--
-                    CHANGED: was <a href="/undo_habit/...">
-                    Same reason — must be POST.
-                -->
                 <form action="/undo_habit/{{ habit.id }}" method="POST">
-                    <button type="submit" class="undo-link">-1</button>
+                    <button type="submit" class="undo-link">Undo</button>
                 </form>
-
-                <!--
-                    CHANGED: was <a href="/delete_habit/..."><button>
-                    Must be POST. Added a confirm() so a misclick
-                    doesn't immediately delete the habit.
-                -->
-                <form action="/delete_habit/{{ habit.id }}" method="POST"
-                      onsubmit="return confirm('Delete {{ habit.name }}?')">
-                    <button type="submit" class="delete-button">Delete</button>
-                </form>
-
             </div>
         </div>
         {% endfor %}
     </div>
 
+    <!-- ── REWARD SHOP ── -->
     <div class="section">
         <h2>Reward Shop</h2>
-
-        <!-- unchanged — add_reward was already POST -->
-        <form action="/add_reward" method="POST">
-            <input type="text" name="name" placeholder="Reward Name" required>
-            <input type="number" name="cost" placeholder="XP Cost" required>
-            <button type="submit">Add Reward</button>
-        </form>
 
         {% for reward in rewards %}
         <div class="reward-card">
@@ -120,35 +96,17 @@
             </div>
 
             <div class="habit-actions">
-
-                <!-- CHANGED: GET link → POST form -->
                 <form action="/redeem/{{ reward.id }}" method="POST">
                     <button type="submit">Redeem</button>
                 </form>
 
-                <!-- CHANGED: GET link → POST form -->
                 <form action="/undo_reward/{{ reward.id }}" method="POST">
                     <button type="submit" class="undo-link">Undo</button>
                 </form>
-
-                <!-- CHANGED: GET link → POST form, added confirm() -->
-                <form action="/delete_reward/{{ reward.id }}" method="POST"
-                      onsubmit="return confirm('Delete {{ reward.name }}?')">
-                    <button type="submit" class="delete-button">Delete</button>
-                </form>
-
             </div>
         </div>
         {% endfor %}
     </div>
-
-    <!--
-        REMOVED: the entire Reset Day section.
-        <a href="/reset_day"><button class="reset-button">Reset Day</button></a>
-        Daily reset is now automatic — completions_today is a live
-        query against habit_logs filtered to today's date, so it
-        resets itself at midnight with no button needed.
-    -->
 
 </div>
 
