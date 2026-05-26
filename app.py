@@ -51,9 +51,15 @@ def init_db():
             habit_id  INTEGER NOT NULL,
             timestamp TEXT    NOT NULL,
             note      TEXT    DEFAULT '',
+            xp_earned INTEGER DEFAULT 0,
             FOREIGN KEY (habit_id) REFERENCES habits(id)
         )
     """)
+    # Patch existing DBs that pre-date the xp_earned column
+    try:
+        db.execute("ALTER TABLE habit_logs ADD COLUMN xp_earned INTEGER DEFAULT 0")
+    except Exception:
+        pass  # column already exists
 
     db.execute("""
         CREATE TABLE IF NOT EXISTS freeze_logs (
@@ -98,13 +104,34 @@ def init_db():
     """)
 
     db.execute("""
-    CREATE TABLE IF NOT EXISTS habit_skips (
-        id        INTEGER PRIMARY KEY AUTOINCREMENT,
-        habit_id  INTEGER NOT NULL,
-        timestamp TEXT    NOT NULL,
-        FOREIGN KEY (habit_id) REFERENCES habits(id)
-    )
-""")
+        CREATE TABLE IF NOT EXISTS habit_skips (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            habit_id  INTEGER NOT NULL,
+            timestamp TEXT    NOT NULL,
+            FOREIGN KEY (habit_id) REFERENCES habits(id)
+        )
+    """)
+
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS todo_lists (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT    NOT NULL,
+            reward_xp  INTEGER NOT NULL DEFAULT 0,
+            completed  INTEGER NOT NULL DEFAULT 0,
+            created_at TEXT    NOT NULL
+        )
+    """)
+
+    db.execute("""
+        CREATE TABLE IF NOT EXISTS todo_items (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            list_id    INTEGER NOT NULL,
+            text       TEXT    NOT NULL,
+            checked    INTEGER NOT NULL DEFAULT 0,
+            sort_order INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (list_id) REFERENCES todo_lists(id)
+        )
+    """)
 
     existing_player = db.execute(
         "SELECT * FROM player WHERE id = 1"
@@ -285,6 +312,9 @@ def calculate_streak_with_freeze(habit_id, trigger_log_id):
     # Merge: a day counts if completed OR skipped
     valid_dates = completion_dates | skip_dates
 
+    # Don't spend a freeze on the gap before this habit ever started
+    min_valid_date = min(valid_dates) if valid_dates else today
+
     check = expected
     for _ in range(365):
         if not is_scheduled_today_for_date(schedule, check):
@@ -294,6 +324,8 @@ def calculate_streak_with_freeze(habit_id, trigger_log_id):
         if check in valid_dates:
             streak += 1
             check -= timedelta(days=1)
+        elif check < min_valid_date:
+            break  # before the habit started — don't spend a freeze here
         elif not freeze_used and habit["streak_freezes"] > 0:
             # Spend freeze to bridge this one missed scheduled day
             db.execute(
@@ -313,6 +345,23 @@ def calculate_streak_with_freeze(habit_id, trigger_log_id):
             break
 
     return streak
+
+def get_daily_summary():
+    """Returns (completed_count, total_scheduled) for today's habits."""
+    db        = get_db()
+    raw       = db.execute("SELECT id, schedule FROM habits").fetchall()
+    today_str = get_today().isoformat()
+    total = done = 0
+    for h in raw:
+        if is_scheduled_today(h["schedule"]):
+            total += 1
+            cnt = db.execute(
+                "SELECT COUNT(*) AS cnt FROM habit_logs WHERE habit_id = ? AND date(timestamp) = ?",
+                (h["id"], today_str)
+            ).fetchone()["cnt"]
+            if cnt > 0:
+                done += 1
+    return done, total
 
 def completions_today(habit_id):
     db    = get_db()
@@ -443,6 +492,12 @@ def home():
     needed            = next_lvl_xp - previous_level_xp
     progress_percent  = int((progress / needed) * 100) if needed > 0 else 0
 
+    # Rolling 7-day window headers matching the week_grid order
+    week_headers = []
+    for i in range(6, -1, -1):
+        d = date.today() - timedelta(days=i)
+        week_headers.append({"label": d.strftime("%a"), "is_today": d == date.today()})
+
     return render_template(
         "index.html",
         habits=habits,
@@ -453,6 +508,7 @@ def home():
         total_habits=total_scheduled,
         completed_count=completed_count,
         today_index=today_index,
+        week_headers=week_headers,
     )
 
 
@@ -519,6 +575,8 @@ def complete_habit(habit_id):
         needed           = next_xp - prev_xp
         progress_percent = int(((new_xp - prev_xp) / needed) * 100) if needed > 0 else 0
 
+        done_count, total_count = get_daily_summary()
+
         return jsonify({
             "ok":                True,
             "messages":          messages,
@@ -534,6 +592,8 @@ def complete_habit(habit_id):
             ).fetchone()["streak_freezes"],
             "progress_percent":  progress_percent,
             "next_level_xp":     next_xp,
+            "completed_count":   done_count,
+            "total_habits":      total_count,
         })
 
     if awarded:
@@ -618,12 +678,14 @@ def undo_habit(habit_id):
     if is_ajax():
 
         # Recalculate after the update
-        current_level = new_level
-        prev_xp  = ((current_level - 1) ** 2) * 100
-        next_xp  = (current_level ** 2) * 100
-        needed   = next_xp - prev_xp
-        progress = new_xp - prev_xp
+        current_level    = new_level
+        prev_xp          = ((current_level - 1) ** 2) * 100
+        next_xp          = (current_level ** 2) * 100
+        needed           = next_xp - prev_xp
+        progress         = new_xp - prev_xp
         progress_percent = int((progress / needed) * 100) if needed > 0 else 0
+        undo_multiplier  = streak_multiplier(new_streak)
+        done_count, total_count = get_daily_summary()
 
         return jsonify({
             "ok":                True,
@@ -636,6 +698,10 @@ def undo_habit(habit_id):
             "streak_freezes":    habit["streak_freezes"],
             "progress_percent":  progress_percent,
             "next_level_xp":     next_xp,
+            "multiplier":        undo_multiplier,
+            "boosted_xp":        int(habit["xp"] * undo_multiplier),
+            "completed_count":   done_count,
+            "total_habits":      total_count,
         })
 
 
@@ -1118,4 +1184,4 @@ def reset_todo_list(list_id):
 if __name__ == "__main__":
     with app.app_context():
         init_db()
-    app.run(debug=True, port=5001)
+    app.run(host="0.0.0.0", port=5001, debug=True)

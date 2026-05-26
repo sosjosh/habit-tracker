@@ -56,8 +56,39 @@ async function postForm(url, formData) {
 }
 
 
+// ── DAILY SUMMARY UPDATE ──
+function updateDailySummary(done, total) {
+    const summaryText = document.querySelector(".summary-text");
+    if (summaryText) {
+        summaryText.innerHTML =
+            `Today's Progress: <strong>${done} / ${total}</strong> habits done`;
+    }
+
+    const bar = document.querySelector(".summary-bar");
+    if (bar) {
+        const pct = total > 0 ? Math.round(done / total * 100) : 0;
+        bar.dataset.progress = pct;
+        bar.style.width      = pct + "%";
+    }
+
+    const completeMsg = document.querySelector(".summary-complete");
+    if (done === total && total > 0) {
+        if (!completeMsg) {
+            const p = document.createElement("p");
+            p.className   = "summary-complete";
+            p.textContent = "🏆 All habits complete for today!";
+            document.querySelector(".summary-section").appendChild(p);
+        }
+    } else {
+        if (completeMsg) completeMsg.remove();
+    }
+}
+
+
 // ── UPDATE HABIT CARD UI ──
 function updateHabitCard(card, data) {
+    const habitId = card.dataset.id;
+
     // Completions today
     const compEl = card.querySelector(".completions-today");
     if (compEl) compEl.textContent = `✅ ${data.completions_today}× today`;
@@ -66,13 +97,15 @@ function updateHabitCard(card, data) {
     const streakEl = card.querySelector(".streak-display");
     if (streakEl) streakEl.textContent = `🔥 ${data.streak} day streak`;
 
-    // XP display
+    // XP display — always update regardless of multiplier value
     const xpEl = card.querySelector(".xp-display");
-    if (xpEl) {
+    if (xpEl && data.multiplier !== undefined) {
         if (data.multiplier > 1) {
             xpEl.innerHTML =
                 `<span class="xp-boosted">${data.boosted_xp} XP</span>` +
                 `<span class="xp-multiplier">×${data.multiplier.toFixed(2)}</span>`;
+        } else {
+            xpEl.textContent = `${data.boosted_xp} XP`;
         }
     }
 
@@ -84,37 +117,70 @@ function updateHabitCard(card, data) {
     const freezeRow = card.querySelector(".freeze-row");
     if (freezeRow) {
         if (data.streak_freezes > 0) {
-            freezeRow.innerHTML =
-                "🧊".repeat(data.streak_freezes) +
-                ` <span class="freeze-label">× ${data.streak_freezes}</span>`;
+            let html = "";
+            for (let i = 0; i < data.streak_freezes; i++) {
+                html += `<span class="freeze-icon">🧊</span>`;
+            }
+            html += ` <span class="freeze-label">× ${data.streak_freezes}</span>`;
+            freezeRow.innerHTML = html;
         } else {
             freezeRow.innerHTML =
                 `<span class="freeze-empty">No freezes — earn 1 per 5 completions</span>`;
         }
     }
 
+    // Update week-strip today cell
+    const todayStrip = card.querySelector(".week-strip-today");
+    if (todayStrip) {
+        if (data.completions_today > 0) {
+            todayStrip.classList.add("week-strip-done");
+        } else {
+            todayStrip.classList.remove("week-strip-done");
+        }
+    }
+
+    // Update weekly overview grid cell for this habit
+    const weeklyRow = document.querySelector(`.weekly-row[data-habit-id="${habitId}"]`);
+    if (weeklyRow) {
+        const todayCell = weeklyRow.querySelector(".weekly-cell-today");
+        if (todayCell) {
+            if (data.completions_today > 0) {
+                todayCell.classList.add("weekly-cell-done");
+                todayCell.textContent = "✓";
+            } else {
+                todayCell.classList.remove("weekly-cell-done");
+                todayCell.textContent = "";
+            }
+        }
+    }
+
     // Update player XP display globally
     if (data.total_xp !== undefined) {
-    const xpDisplay = document.querySelector(".player-xp");
-    if (xpDisplay) xpDisplay.textContent = `Total XP: ${data.total_xp}`;
+        const xpDisplay = document.querySelector(".player-xp");
+        if (xpDisplay) xpDisplay.textContent = `Total XP: ${data.total_xp}`;
 
-    const levelDisplay = document.querySelector(".player-level");
-    if (levelDisplay) levelDisplay.textContent = `Level: ${data.level}`;
+        const levelDisplay = document.querySelector(".player-level");
+        if (levelDisplay) levelDisplay.textContent = `Level: ${data.level}`;
 
-    // Update the XP progress bar
-    const bar = document.querySelector(".progress-bar");
-    if (bar && data.progress_percent !== undefined) {
-        bar.dataset.progress  = data.progress_percent;
-        bar.style.width       = data.progress_percent + "%";
+        // Update the XP progress bar
+        const bar = document.querySelector(".progress-bar");
+        if (bar && data.progress_percent !== undefined) {
+            bar.dataset.progress = data.progress_percent;
+            bar.style.width      = data.progress_percent + "%";
+        }
+
+        // Update the % label
+        const pctLabel = document.querySelector(".progress-label");
+        if (pctLabel && data.progress_percent !== undefined) {
+            pctLabel.textContent =
+                `${data.progress_percent}% to Level ${data.level + 1}`;
+        }
     }
 
-    // Update the % label
-    const pctLabel = document.querySelector(".progress-label");
-    if (pctLabel && data.progress_percent !== undefined) {
-        pctLabel.textContent =
-            `${data.progress_percent}% to Level ${data.level + 1}`;
+    // Update daily summary bar
+    if (data.completed_count !== undefined && data.total_habits !== undefined) {
+        updateDailySummary(data.completed_count, data.total_habits);
     }
-}
 }
 
 

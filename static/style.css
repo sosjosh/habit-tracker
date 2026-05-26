@@ -341,6 +341,20 @@ input {
     overflow-x: auto;
 }
 
+.weekly-day-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #777;
+    text-align: center;
+    padding: 4px 2px 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.weekly-day-header.weekly-today {
+    color: #4caf50;
+}
+
 /* ── TWO COLUMN HABIT LAYOUT ── */
 #habit-list {
     display: grid;
@@ -408,7 +422,17 @@ input {
     overflow-x: auto;
 }
 
-.weekly-header,
+.weekly-header {
+    display: grid;
+    grid-template-columns: 120px repeat(7, 1fr);
+    gap: 4px;
+    margin-bottom: 6px;
+    align-items: end;
+    min-width: 0;
+    border-bottom: 1px solid #2a2a2a;
+    padding-bottom: 4px;
+}
+
 .weekly-row {
     display: grid;
     grid-template-columns: 120px repeat(7, 1fr);
@@ -445,7 +469,8 @@ input {
 }
 
 .weekly-cell-today {
-    border: 1px solid #555;
+    border: 1px solid #4caf50;
+    background: #1e2a1e;
 }
 
 /* ── WEEK STRIP (inside habit card) ── */

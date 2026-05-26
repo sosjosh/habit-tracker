@@ -61,17 +61,16 @@
             <!-- Day headers -->
             <div class="weekly-header">
                 <div class="weekly-habit-label"></div>
-                {% set days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] %}
-                {% for i in range(7) %}
-                <div class="weekly-day-header {% if i == today_index %}weekly-today{% endif %}">
-                    {{ days[i] }}
+                {% for day in week_headers %}
+                <div class="weekly-day-header {% if day.is_today %}weekly-today{% endif %}">
+                    {{ day.label }}
                 </div>
                 {% endfor %}
             </div>
 
             <!-- One row per habit -->
             {% for habit in habits %}
-            <div class="weekly-row">
+            <div class="weekly-row" data-habit-id="{{ habit.id }}">
                 <div class="weekly-habit-label" title="{{ habit.name }}">
                     {{ habit.name }}
                 </div>
