@@ -1,7 +1,56 @@
 from flask import Flask, render_template, request, redirect, url_for, g, flash, jsonify
 import sqlite3
 import math
+import os
+import re
 from datetime import datetime, date, timedelta
+
+try:
+    import psycopg2
+    import psycopg2.extras
+except ImportError:
+    psycopg2 = None
+
+# Railway injects DATABASE_URL; older Heroku-style URLs use postgres:// which
+# psycopg2 requires as postgresql://
+_DB_URL = os.environ.get("DATABASE_URL", "")
+if _DB_URL.startswith("postgres://"):
+    _DB_URL = _DB_URL.replace("postgres://", "postgresql://", 1)
+USE_POSTGRES = bool(_DB_URL and psycopg2)
+
+
+class PgWrapper:
+    """Makes psycopg2 behave like sqlite3 for the patterns used in this app."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        self.lastrowid = None
+
+    def execute(self, sql, params=()):
+        sql = sql.replace("?", "%s")
+        # SQLite date(timestamp) → Postgres cast
+        sql = re.sub(r"\bdate\(timestamp\)", '"timestamp"::date', sql)
+        is_insert = sql.strip().upper().startswith("INSERT")
+        if is_insert and "RETURNING" not in sql.upper():
+            sql = sql.rstrip().rstrip(";") + " RETURNING id"
+        self._cur.execute(sql, params)
+        if is_insert:
+            row = self._cur.fetchone()
+            self.lastrowid = row["id"] if row else None
+        return self
+
+    def fetchone(self):
+        return self._cur.fetchone()
+
+    def fetchall(self):
+        return self._cur.fetchall()
+
+    def commit(self):
+        self._conn.commit()
+
+    def close(self):
+        self._conn.close()
 
 def is_ajax():
     """Returns True if the request was made via fetch() in app.js."""
@@ -18,9 +67,13 @@ DATABASE = "habits.db"
 
 def get_db():
     if "db" not in g:
-        g.db = sqlite3.connect(DATABASE)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute("PRAGMA journal_mode=WAL")
+        if USE_POSTGRES:
+            g.db = PgWrapper(psycopg2.connect(_DB_URL))
+        else:
+            conn = sqlite3.connect(DATABASE)
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA journal_mode=WAL")
+            g.db = conn
     return g.db
 
 @app.teardown_appcontext
@@ -30,11 +83,12 @@ def close_db(error):
         db.close()
 
 def init_db():
-    db = get_db()
+    db  = get_db()
+    pk  = "SERIAL PRIMARY KEY" if USE_POSTGRES else "INTEGER PRIMARY KEY AUTOINCREMENT"
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS habits (
-            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            id             {pk},
             name           TEXT    NOT NULL,
             xp             INTEGER NOT NULL DEFAULT 10,
             streak         INTEGER NOT NULL DEFAULT 0,
@@ -45,9 +99,9 @@ def init_db():
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS habit_logs (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            id        {pk},
             habit_id  INTEGER NOT NULL,
             timestamp TEXT    NOT NULL,
             note      TEXT    DEFAULT '',
@@ -55,23 +109,24 @@ def init_db():
             FOREIGN KEY (habit_id) REFERENCES habits(id)
         )
     """)
-    # Patch existing DBs that pre-date the xp_earned column
-    try:
-        db.execute("ALTER TABLE habit_logs ADD COLUMN xp_earned INTEGER DEFAULT 0")
-    except Exception:
-        pass  # column already exists
+    # Patch existing SQLite DBs that pre-date the xp_earned column
+    if not USE_POSTGRES:
+        try:
+            db.execute("ALTER TABLE habit_logs ADD COLUMN xp_earned INTEGER DEFAULT 0")
+        except Exception:
+            pass
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS freeze_logs (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            id           {pk},
             habit_id     INTEGER NOT NULL,
             habit_log_id INTEGER NOT NULL
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS freeze_spent_logs (
-            id           INTEGER PRIMARY KEY AUTOINCREMENT,
+            id           {pk},
             habit_id     INTEGER NOT NULL,
             habit_log_id INTEGER NOT NULL
         )
@@ -85,17 +140,17 @@ def init_db():
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS rewards (
-            id   INTEGER PRIMARY KEY AUTOINCREMENT,
+            id   {pk},
             name TEXT    NOT NULL,
             cost INTEGER NOT NULL
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS redemption_logs (
-            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            id          {pk},
             reward_id   INTEGER NOT NULL,
             reward_name TEXT    NOT NULL,
             cost        INTEGER NOT NULL,
@@ -103,18 +158,18 @@ def init_db():
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS habit_skips (
-            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            id        {pk},
             habit_id  INTEGER NOT NULL,
             timestamp TEXT    NOT NULL,
             FOREIGN KEY (habit_id) REFERENCES habits(id)
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS todo_lists (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            id         {pk},
             name       TEXT    NOT NULL,
             reward_xp  INTEGER NOT NULL DEFAULT 0,
             completed  INTEGER NOT NULL DEFAULT 0,
@@ -122,9 +177,9 @@ def init_db():
         )
     """)
 
-    db.execute("""
+    db.execute(f"""
         CREATE TABLE IF NOT EXISTS todo_items (
-            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            id         {pk},
             list_id    INTEGER NOT NULL,
             text       TEXT    NOT NULL,
             checked    INTEGER NOT NULL DEFAULT 0,
@@ -1181,7 +1236,9 @@ def reset_todo_list(list_id):
 # STARTUP
 # ─────────────────────────────────────────────
 
+# Run on every startup (gunicorn imports this module, so __main__ is skipped)
+with app.app_context():
+    init_db()
+
 if __name__ == "__main__":
-    with app.app_context():
-        init_db()
     app.run(host="0.0.0.0", port=5001, debug=True)
