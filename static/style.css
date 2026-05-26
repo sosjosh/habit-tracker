@@ -30,28 +30,6 @@ h1 {
     margin-bottom: 20px;
 }
 
-.habit-card,
-.reward-card {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #2d2d2d;
-    padding: 15px;
-    border-radius: 10px;
-    margin-top: 10px;
-}
-
-.habit-left {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-}
-
-.habit-actions {
-    display: flex;
-    gap: 10px;
-}
-
 .progress-container {
     width: 100%;
     height: 24px;
@@ -363,34 +341,90 @@ input {
     overflow-x: auto;
 }
 
+/* ── TWO COLUMN HABIT LAYOUT ── */
+#habit-list {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+}
+
+@media (max-width: 700px) {
+    #habit-list {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── HABIT CARD ── */
+.habit-card {
+    display: flex;
+    flex-direction: column;
+    background: #2d2d2d;
+    padding: 15px;
+    border-radius: 10px;
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.reward-card {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
+    background: #2d2d2d;
+    padding: 15px;
+    border-radius: 10px;
+    margin-top: 10px;
+}
+
+.habit-left {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.habit-left > div {
+    min-width: 0;
+    flex: 1;
+}
+
+.habit-left h3 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin: 0 0 4px;
+}
+
+.habit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+/* ── WEEKLY OVERVIEW GRID ── */
+.weekly-overview {
+    overflow-x: auto;
+}
+
 .weekly-header,
 .weekly-row {
     display: grid;
-    grid-template-columns: 140px repeat(7, 1fr);
+    grid-template-columns: 120px repeat(7, 1fr);
     gap: 4px;
     margin-bottom: 4px;
     align-items: center;
-}
-
-.weekly-day-header {
-    text-align: center;
-    font-size: 11px;
-    color: #aaa;
-    padding: 4px 0;
-}
-
-.weekly-today {
-    color: #4caf50;
-    font-weight: bold;
+    min-width: 0;
 }
 
 .weekly-habit-label {
-    font-size: 12px;
+    font-size: 11px;
     color: #ccc;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    padding-right: 8px;
+    padding-right: 4px;
 }
 
 .weekly-cell {

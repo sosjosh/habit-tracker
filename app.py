@@ -1,7 +1,11 @@
-from flask import Flask, render_template, request, redirect, url_for, g, flash
+from flask import Flask, render_template, request, redirect, url_for, g, flash, jsonify
 import sqlite3
 import math
 from datetime import datetime, date, timedelta
+
+def is_ajax():
+    """Returns True if the request was made via fetch() in app.js."""
+    return request.headers.get("X-Requested-With") == "XMLHttpRequest"
 
 app = Flask(__name__)
 app.secret_key = "habitquest-secret-key"
@@ -460,26 +464,30 @@ def complete_habit(habit_id):
     ).fetchone()
 
     if not habit:
+        if is_ajax():
+            return jsonify({"ok": False, "message": "Habit not found"}), 404
         return redirect(url_for("home"))
 
-    note   = request.form.get("note", "").strip()
-    now    = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    note = request.form.get("note", "").strip()
+    now  = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Calculate XP ONCE using pre-insert streak, store it on the log
+    pre_streak = calculate_streak_only(habit_id)
+    multiplier = streak_multiplier(pre_streak)
+    earned_xp  = int(habit["xp"] * multiplier)
+
     cursor = db.execute(
-        "INSERT INTO habit_logs (habit_id, timestamp, note) VALUES (?, ?, ?)",
-        (habit_id, now, note)
+        "INSERT INTO habit_logs (habit_id, timestamp, note, xp_earned) VALUES (?, ?, ?, ?)",
+        (habit_id, now, note, earned_xp)
     )
     db.commit()
     new_log_id = cursor.lastrowid
 
+    # Update streak (may spend a freeze) — does NOT change earned_xp
     new_streak = calculate_streak_with_freeze(habit_id, new_log_id)
-    db.execute(
-        "UPDATE habits SET streak = ? WHERE id = ?",
-        (new_streak, habit_id)
-    )
+    db.execute("UPDATE habits SET streak = ? WHERE id = ?", (new_streak, habit_id))
 
-    multiplier = streak_multiplier(new_streak)
-    earned_xp  = int(habit["xp"] * multiplier)
-
+    # Award the already-calculated earned_xp
     player    = db.execute("SELECT * FROM player WHERE id = 1").fetchone()
     new_xp    = player["total_xp"] + earned_xp
     new_level = calculate_level(new_xp)
@@ -489,17 +497,47 @@ def complete_habit(habit_id):
     )
     db.commit()
 
-    awarded = maybe_award_freeze(habit_id, new_log_id)
-    if awarded:
-        flash(
-            f"🧊 Streak freeze earned for <strong>{habit['name']}</strong>!",
-            "freeze"
-        )
+    awarded     = maybe_award_freeze(habit_id, new_log_id)
+    completions = completions_today(habit_id)
+    bonus_note  = f" (×{multiplier:.2f} streak bonus)" if multiplier > 1 else ""
 
-    bonus_note = (
-        f" <small>(×{multiplier:.2f} streak bonus)</small>"
-        if multiplier > 1 else ""
-    )
+    if is_ajax():
+        messages = []
+        if awarded:
+            messages.append({
+                "category": "freeze",
+                "text": f"🧊 Streak freeze earned for {habit['name']}!"
+            })
+        messages.append({
+            "category": "success",
+            "text": f"✅ Completed {habit['name']} — +{earned_xp} XP!{bonus_note}"
+        })
+
+        current_level    = new_level
+        prev_xp          = ((current_level - 1) ** 2) * 100
+        next_xp          = (current_level ** 2) * 100
+        needed           = next_xp - prev_xp
+        progress_percent = int(((new_xp - prev_xp) / needed) * 100) if needed > 0 else 0
+
+        return jsonify({
+            "ok":                True,
+            "messages":          messages,
+            "completions_today": completions,
+            "streak":            new_streak,
+            "total_xp":          new_xp,
+            "level":             new_level,
+            "earned_xp":         earned_xp,
+            "multiplier":        multiplier,
+            "boosted_xp":        int(habit["xp"] * multiplier),
+            "streak_freezes":    db.execute(
+                "SELECT streak_freezes FROM habits WHERE id = ?", (habit_id,)
+            ).fetchone()["streak_freezes"],
+            "progress_percent":  progress_percent,
+            "next_level_xp":     next_xp,
+        })
+
+    if awarded:
+        flash(f"🧊 Streak freeze earned for <strong>{habit['name']}</strong>!", "freeze")
     flash(
         f"✅ Completed <strong>{habit['name']}</strong> — +{earned_xp} XP!{bonus_note}",
         "success"
@@ -519,18 +557,24 @@ def undo_habit(habit_id):
     """, (habit_id,)).fetchone()
 
     if not last_log:
+        if is_ajax():
+            return jsonify({"ok": False, "message": "Nothing to undo."})
         flash("Nothing to undo.", "info")
         return redirect(url_for("home"))
 
     log_id = last_log["id"]
 
+    # Read the exact XP that was awarded at completion time
+    log_row   = db.execute(
+        "SELECT xp_earned FROM habit_logs WHERE id = ?", (log_id,)
+    ).fetchone()
+    earned_xp = log_row["xp_earned"] if log_row and log_row["xp_earned"] else 0
+
     freeze_award = db.execute(
         "SELECT id FROM freeze_logs WHERE habit_log_id = ?", (log_id,)
     ).fetchone()
     if freeze_award:
-        db.execute(
-            "DELETE FROM freeze_logs WHERE id = ?", (freeze_award["id"],)
-        )
+        db.execute("DELETE FROM freeze_logs WHERE id = ?", (freeze_award["id"],))
         db.execute(
             "UPDATE habits SET streak_freezes = MAX(0, streak_freezes - 1) WHERE id = ?",
             (habit_id,)
@@ -549,6 +593,7 @@ def undo_habit(habit_id):
         )
 
     db.execute("DELETE FROM habit_logs WHERE id = ?", (log_id,))
+    
 
     new_streak = calculate_streak_only(habit_id)
     habit      = db.execute(
@@ -558,11 +603,8 @@ def undo_habit(habit_id):
         "UPDATE habits SET streak = ? WHERE id = ?", (new_streak, habit_id)
     )
 
-    multiplier = streak_multiplier(new_streak)
-    earned_xp  = int(habit["xp"] * multiplier)
-    player     = db.execute(
-        "SELECT total_xp FROM player WHERE id = 1"
-    ).fetchone()
+    # Use stored earned_xp instead of recalculating
+    player    = db.execute("SELECT total_xp FROM player WHERE id = 1").fetchone()
     new_xp    = max(0, player["total_xp"] - earned_xp)
     new_level = calculate_level(new_xp)
     db.execute(
@@ -571,10 +613,33 @@ def undo_habit(habit_id):
     )
     db.commit()
 
-    flash(
-        f"↩️ Undid <strong>{habit['name']}</strong> — -{earned_xp} XP.",
-        "info"
-    )
+    completions = completions_today(habit_id)
+
+    if is_ajax():
+
+        # Recalculate after the update
+        current_level = new_level
+        prev_xp  = ((current_level - 1) ** 2) * 100
+        next_xp  = (current_level ** 2) * 100
+        needed   = next_xp - prev_xp
+        progress = new_xp - prev_xp
+        progress_percent = int((progress / needed) * 100) if needed > 0 else 0
+
+        return jsonify({
+            "ok":                True,
+            "messages":          [{"category": "info",
+                                "text": f"↩️ Undid {habit['name']} — -{earned_xp} XP."}],
+            "completions_today": completions,
+            "streak":            new_streak,
+            "total_xp":          new_xp,
+            "level":             new_level,
+            "streak_freezes":    habit["streak_freezes"],
+            "progress_percent":  progress_percent,
+            "next_level_xp":     next_xp,
+        })
+
+
+    flash(f"↩️ Undid <strong>{habit['name']}</strong> — -{earned_xp} XP.", "info")
     return redirect(url_for("home"))
 
 
@@ -584,13 +649,18 @@ def pin_habit(habit_id):
     habit = db.execute(
         "SELECT pinned FROM habits WHERE id = ?", (habit_id,)
     ).fetchone()
-    if habit:
-        new_pinned = 0 if habit["pinned"] else 1
-        db.execute(
-            "UPDATE habits SET pinned = ? WHERE id = ?",
-            (new_pinned, habit_id)
-        )
-        db.commit()
+    if not habit:
+        if is_ajax(): return jsonify({"ok": False})
+        return redirect(url_for("home"))
+
+    new_pinned = 0 if habit["pinned"] else 1
+    db.execute(
+        "UPDATE habits SET pinned = ? WHERE id = ?", (new_pinned, habit_id)
+    )
+    db.commit()
+
+    if is_ajax():
+        return jsonify({"ok": True, "pinned": new_pinned})
     return redirect(url_for("home"))
 
 
@@ -647,21 +717,27 @@ def skip_habit(habit_id):
     Streak is preserved without spending a freeze.
     """
     db    = get_db()
-    habit = db.execute("SELECT * FROM habits WHERE id = ?", (habit_id,)).fetchone()
+    habit = db.execute(
+        "SELECT * FROM habits WHERE id = ?", (habit_id,)
+    ).fetchone()
 
     if not habit:
+        if is_ajax(): return jsonify({"ok": False})
         return redirect(url_for("home"))
 
     today = get_today().isoformat()
-
-    # Don't double-skip
     already_skipped = db.execute("""
         SELECT id FROM habit_skips
-        WHERE habit_id = ?
-          AND date(timestamp) = ?
+        WHERE habit_id = ? AND date(timestamp) = ?
     """, (habit_id, today)).fetchone()
 
     if already_skipped:
+        if is_ajax():
+            return jsonify({
+                "ok": False,
+                "messages": [{"category": "info",
+                              "text": f"Already skipped {habit['name']} today."}]
+            })
         flash(f"Already skipped <strong>{habit['name']}</strong> today.", "info")
         return redirect(url_for("home"))
 
@@ -672,7 +748,16 @@ def skip_habit(habit_id):
     )
     db.commit()
 
-    flash(f"⏭️ Skipped <strong>{habit['name']}</strong> today — streak preserved.", "info")
+    if is_ajax():
+        return jsonify({
+            "ok": True,
+            "messages": [{"category": "info",
+                          "text": f"⏭️ Skipped {habit['name']} — streak preserved."}]
+        })
+    flash(
+        f"⏭️ Skipped <strong>{habit['name']}</strong> today — streak preserved.",
+        "info"
+    )
     return redirect(url_for("home"))
 
 
