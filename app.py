@@ -883,6 +883,106 @@ def skip_habit(habit_id):
 
 
 # ─────────────────────────────────────────────
+# ROUTES — ADMIN
+# ─────────────────────────────────────────────
+
+@app.route("/admin")
+def admin():
+    db      = get_db()
+    habits  = db.execute("SELECT * FROM habits ORDER BY sort_order ASC").fetchall()
+    rewards = db.execute("SELECT * FROM rewards ORDER BY cost ASC").fetchall()
+    return render_template("admin.html", habits=habits, rewards=rewards)
+
+
+@app.route("/admin/add_habit", methods=["POST"])
+def admin_add_habit():
+    db       = get_db()
+    name     = request.form.get("name", "").strip()
+    xp       = int(request.form.get("xp", 10))
+    days     = request.form.getlist("days")
+    schedule = "".join("1" if str(i) in days else "0" for i in range(7))
+    if not name:
+        flash("Habit name required.", "error")
+        return redirect(url_for("admin"))
+    max_order = db.execute("SELECT COALESCE(MAX(sort_order),0) AS m FROM habits").fetchone()["m"]
+    db.execute(
+        "INSERT INTO habits (name, xp, schedule, sort_order) VALUES (?, ?, ?, ?)",
+        (name, xp, schedule, max_order + 1)
+    )
+    db.commit()
+    flash(f"✅ Added habit <strong>{name}</strong>.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/edit_habit/<int:habit_id>", methods=["POST"])
+def admin_edit_habit(habit_id):
+    db       = get_db()
+    name     = request.form.get("name", "").strip()
+    xp       = int(request.form.get("xp", 10))
+    days     = request.form.getlist("days")
+    schedule = "".join("1" if str(i) in days else "0" for i in range(7))
+    if not name:
+        flash("Habit name required.", "error")
+        return redirect(url_for("admin"))
+    db.execute(
+        "UPDATE habits SET name = ?, xp = ?, schedule = ? WHERE id = ?",
+        (name, xp, schedule, habit_id)
+    )
+    db.commit()
+    flash(f"✏️ Updated <strong>{name}</strong>.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/delete_habit/<int:habit_id>", methods=["POST"])
+def admin_delete_habit(habit_id):
+    db    = get_db()
+    habit = db.execute("SELECT name FROM habits WHERE id = ?", (habit_id,)).fetchone()
+    db.execute("DELETE FROM habit_logs      WHERE habit_id = ?", (habit_id,))
+    db.execute("DELETE FROM habit_skips     WHERE habit_id = ?", (habit_id,))
+    db.execute("DELETE FROM freeze_logs     WHERE habit_id = ?", (habit_id,))
+    db.execute("DELETE FROM freeze_spent_logs WHERE habit_id = ?", (habit_id,))
+    db.execute("DELETE FROM habits          WHERE id = ?",        (habit_id,))
+    db.commit()
+    flash(f"🗑️ Deleted <strong>{habit['name']}</strong>.", "info")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/add_reward", methods=["POST"])
+def admin_add_reward():
+    db   = get_db()
+    name = request.form.get("name", "").strip()
+    cost = int(request.form.get("cost", 100))
+    if not name:
+        flash("Reward name required.", "error")
+        return redirect(url_for("admin"))
+    db.execute("INSERT INTO rewards (name, cost) VALUES (?, ?)", (name, cost))
+    db.commit()
+    flash(f"🎁 Added reward <strong>{name}</strong>.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/edit_reward/<int:reward_id>", methods=["POST"])
+def admin_edit_reward(reward_id):
+    db   = get_db()
+    name = request.form.get("name", "").strip()
+    cost = int(request.form.get("cost", 100))
+    db.execute("UPDATE rewards SET name = ?, cost = ? WHERE id = ?", (name, cost, reward_id))
+    db.commit()
+    flash(f"✏️ Updated <strong>{name}</strong>.", "success")
+    return redirect(url_for("admin"))
+
+
+@app.route("/admin/delete_reward/<int:reward_id>", methods=["POST"])
+def admin_delete_reward(reward_id):
+    db     = get_db()
+    reward = db.execute("SELECT name FROM rewards WHERE id = ?", (reward_id,)).fetchone()
+    db.execute("DELETE FROM rewards WHERE id = ?", (reward_id,))
+    db.commit()
+    flash(f"🗑️ Deleted <strong>{reward['name']}</strong>.", "info")
+    return redirect(url_for("admin"))
+
+
+# ─────────────────────────────────────────────
 # ROUTES — REWARDS
 # ─────────────────────────────────────────────
 

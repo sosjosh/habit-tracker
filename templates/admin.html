@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin — Habit Quest</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<div class="container">
+
+    <h1>⚙️ Admin</h1>
+    <a href="/" class="back-link">← Back to Habit Quest</a>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="flash-container">
+            {% for category, message in messages %}
+            <div class="flash flash-{{ category }}">{{ message | safe }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endwith %}
+
+    <!-- ADD HABIT -->
+    <div class="section">
+        <h2>Add Habit</h2>
+        <form action="/admin/add_habit" method="POST" class="admin-form">
+            <input name="name" placeholder="Habit name" required>
+            <input name="xp" type="number" value="10" min="1" placeholder="Base XP">
+            <div class="day-picker">
+                {% set day_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] %}
+                {% for i in range(7) %}
+                <label class="day-label">
+                    <input type="checkbox" name="days" value="{{ i }}" checked>
+                    {{ day_names[i] }}
+                </label>
+                {% endfor %}
+            </div>
+            <button type="submit">Add Habit</button>
+        </form>
+    </div>
+
+    <!-- HABIT LIST -->
+    <div class="section">
+        <h2>Habits</h2>
+        {% if habits %}
+        {% set day_names = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"] %}
+        {% for habit in habits %}
+        <div class="admin-card">
+            <form action="/admin/edit_habit/{{ habit.id }}" method="POST" class="admin-edit-form">
+                <input name="name" value="{{ habit.name }}" required>
+                <input name="xp" type="number" value="{{ habit.xp }}" min="1" style="width:70px">
+                <div class="day-picker">
+                    {% for i in range(7) %}
+                    <label class="day-label">
+                        <input type="checkbox" name="days" value="{{ i }}"
+                            {% if habit.schedule[i] == '1' %}checked{% endif %}>
+                        {{ day_names[i] }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <div class="admin-actions">
+                    <button type="submit">Save</button>
+                    <form action="/admin/delete_habit/{{ habit.id }}" method="POST"
+                          onsubmit="return confirm('Delete {{ habit.name }}?')">
+                        <button type="submit" class="delete-button">Delete</button>
+                    </form>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color:#555">No habits yet.</p>
+        {% endif %}
+    </div>
+
+    <!-- ADD REWARD -->
+    <div class="section">
+        <h2>Add Reward</h2>
+        <form action="/admin/add_reward" method="POST" class="admin-form">
+            <input name="name" placeholder="Reward name" required>
+            <input name="cost" type="number" value="100" min="1" placeholder="XP cost">
+            <button type="submit">Add Reward</button>
+        </form>
+    </div>
+
+    <!-- REWARD LIST -->
+    <div class="section">
+        <h2>Rewards</h2>
+        {% if rewards %}
+        {% for reward in rewards %}
+        <div class="admin-card">
+            <form action="/admin/edit_reward/{{ reward.id }}" method="POST" class="admin-edit-form">
+                <input name="name" value="{{ reward.name }}" required>
+                <input name="cost" type="number" value="{{ reward.cost }}" min="1" style="width:90px">
+                <div class="admin-actions">
+                    <button type="submit">Save</button>
+                    <form action="/admin/delete_reward/{{ reward.id }}" method="POST"
+                          onsubmit="return confirm('Delete {{ reward.name }}?')">
+                        <button type="submit" class="delete-button">Delete</button>
+                    </form>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p style="color:#555">No rewards yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+</body>
+</html>
